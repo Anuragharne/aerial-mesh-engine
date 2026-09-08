@@ -59,12 +59,30 @@ def main():
     else:
         colors = np.ones_like(points) * 0.7
 
-    # Load opacity if present
+    # Load opacities
     if "opacity" in vertex:
-        opacities = 1.0 / (1.0 + np.exp(-np.array(vertex["opacity"])))
-        mask = opacities > 0.05
-        points = points[mask]
-        colors = colors[mask]
+        opacities = np.array(vertex["opacity"])
+    else:
+        opacities = np.ones(len(points), dtype=np.float32)
+
+    # Filter out invisible or very transparent gaussians to save memory
+    mask = opacities > 0.01
+    points = points[mask]
+    colors = colors[mask]
+    opacities = opacities[mask]
+
+    scales = np.stack([
+        np.array(vertex["scale_0"]),
+        np.array(vertex["scale_1"]),
+        np.array(vertex["scale_2"])
+    ], axis=-1)[mask]
+
+    quats = np.stack([
+        np.array(vertex["rot_0"]),
+        np.array(vertex["rot_1"]),
+        np.array(vertex["rot_2"]),
+        np.array(vertex["rot_3"])
+    ], axis=-1)[mask]
 
     num_points = len(points)
     print(f"  Loaded {num_points} active Gaussians.")
@@ -73,17 +91,36 @@ def main():
         indices = np.random.choice(num_points, args.max_points, replace=False)
         points = points[indices]
         colors = colors[indices]
+        opacities = opacities[indices]
+        scales = scales[indices]
+        quats = quats[indices]
         print(f"  Subsampled to {args.max_points} points for smooth 60fps web rendering.")
+
+    # Compute covariances for Viser
+    w, x, y, z = quats[:, 0], quats[:, 1], quats[:, 2], quats[:, 3]
+    R = np.zeros((len(quats), 3, 3), dtype=np.float32)
+    R[:, 0, 0] = 1.0 - 2.0 * (y**2 + z**2)
+    R[:, 0, 1] = 2.0 * (x*y - z*w)
+    R[:, 0, 2] = 2.0 * (x*z + y*w)
+    R[:, 1, 0] = 2.0 * (x*y + z*w)
+    R[:, 1, 1] = 1.0 - 2.0 * (x**2 + z**2)
+    R[:, 1, 2] = 2.0 * (y*z - x*w)
+    R[:, 2, 0] = 2.0 * (x*z - y*w)
+    R[:, 2, 1] = 2.0 * (y*z + x*w)
+    R[:, 2, 2] = 1.0 - 2.0 * (x**2 + y**2)
+
+    M = R * scales[:, np.newaxis, :]
+    covariances = np.einsum('nij,nkj->nik', M, M)
 
     print(f"\n[+] Starting Viser Web Server on http://localhost:{args.port}...")
     server = viser.ViserServer(host="0.0.0.0", port=args.port)
 
-    server.scene.add_point_cloud(
+    server.scene.add_gaussian_splats(
         name="/gaussian_splats",
-        points=points,
-        colors=colors,
-        point_size=0.03,
-        point_shape="circle"
+        centers=points,
+        covariances=covariances,
+        rgbs=colors,
+        opacities=opacities[:, np.newaxis]
     )
 
     # Coordinate grid
