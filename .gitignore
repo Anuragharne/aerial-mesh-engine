@@ -1,0 +1,32 @@
+# Environment
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+.env
+
+# Output and Caches
+outputs/*
+!outputs/.gitkeep
+.gradio/
+logs/
+*.log
+
+# Third Party Repositories (we only track our patches)
+third_party/*
+!third_party/.gitkeep
+
+# Models
+models/*
+!models/.gitkeep
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# MacOS
+.DS_Store
