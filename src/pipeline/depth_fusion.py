@@ -65,8 +65,8 @@ def tsdf_fusion(data, voxel_length=0.02, sdf_trunc_multiplier=3.0,
     """
     import open3d as o3d
 
-    depth_map = data["depth_map"]     # (S, H, W)
-    depth_conf = data["depth_conf"]   # (S, H, W)
+    depth_map = np.squeeze(data["depth_map"], axis=-1) if data["depth_map"].ndim == 4 and data["depth_map"].shape[-1] == 1 else data["depth_map"]     # (S, H, W)
+    depth_conf = np.squeeze(data["depth_conf"], axis=-1) if data["depth_conf"].ndim == 4 and data["depth_conf"].shape[-1] == 1 else data["depth_conf"]   # (S, H, W)
     extrinsic = data["extrinsic"]     # (S, 3, 4) camera-from-world
     intrinsic = data["intrinsic"]     # (S, 3, 3)
     images_rgb = data["images_rgb"]   # (S, H, W, 3) uint8

@@ -1,4 +1,4 @@
-"""
+﻿"""
 VGGT Quality Gate & Single-Frame Projection Sanity Test
 
 This script:
@@ -8,7 +8,7 @@ This script:
    - Verifies VGGT depth units/convention
    - Verifies camera-from-world vs world-from-camera
    - Verifies intrinsics
-   - Tests round-trip: pixel → 3D → pixel
+   - Tests round-trip: pixel â†’ 3D â†’ pixel
    - Saves diagnostic visualizations
 4. Reports whether VGGT output is safe for TSDF fusion
 
@@ -49,7 +49,7 @@ def load_vggt_raw(scene_dir):
 
 def quality_gate_a(data):
     """
-    Quality Gate A — VGGT Output Validation.
+    Quality Gate A â€” VGGT Output Validation.
     Returns (passed: bool, report: dict)
     """
     report = {"gate": "A", "checks": {}, "passed": True}
@@ -125,7 +125,7 @@ def quality_gate_a(data):
     }
     report["checks"]["confidence_stats"] = conf_stats
 
-    # Check 5: Camera poses — check for degenerate extrinsics
+    # Check 5: Camera poses â€” check for degenerate extrinsics
     cam_positions = []
     for i in range(S):
         R = extrinsic[i, :3, :3]
@@ -200,7 +200,7 @@ def single_frame_sanity_test(data, frame_idx=0):
     """
     report = {"frame_idx": frame_idx, "checks": {}}
 
-    depth = data["depth_map"][frame_idx]       # (H, W)
+    depth = np.squeeze(data["depth_map"][frame_idx])       # (H, W)
     conf = data["depth_conf"][frame_idx]        # (H, W)
     E = data["extrinsic"][frame_idx]            # (3, 4) camera-from-world
     K = data["intrinsic"][frame_idx]            # (3, 3)
@@ -243,7 +243,7 @@ def single_frame_sanity_test(data, frame_idx=0):
         "max": float(valid_depth.max()) if len(valid_depth) > 0 else None,
         "mean": float(valid_depth.mean()) if len(valid_depth) > 0 else None,
         "note": "VGGT depth is z-depth in camera coords. Units are arbitrary "
-                "(not metric) — metric scale comes from GPS/SRT alignment.",
+                "(not metric) â€” metric scale comes from GPS/SRT alignment.",
     }
 
     # --- Intrinsics check ---
@@ -257,18 +257,18 @@ def single_frame_sanity_test(data, frame_idx=0):
         "resolution": [H, W],
     }
 
-    # --- Round-trip test: unproject → reproject ---
+    # --- Round-trip test: unproject â†’ reproject ---
     # Pick center pixel
     py, px = H // 2, W // 2
     z = depth[py, px]
     if z > 0.01:
-        # Unproject: pixel → camera coords
+        # Unproject: pixel â†’ camera coords
         x_cam = (px - cx) * z / fx
         y_cam = (py - cy) * z / fy
         z_cam = z
         pt_cam = np.array([x_cam, y_cam, z_cam])
 
-        # Camera → world
+        # Camera â†’ world
         pt_world_computed = E_inv[:3, :3] @ pt_cam + E_inv[:3, 3]
         pt_world_vggt = world_pts[py, px]
 
@@ -286,7 +286,7 @@ def single_frame_sanity_test(data, frame_idx=0):
                     "with depth+intrinsic+extrinsic unprojection."
         }
 
-        # Reproject: world → pixel
+        # Reproject: world â†’ pixel
         pt_cam_reproj = R @ pt_world_computed + t
         if pt_cam_reproj[2] > 0:
             px_reproj = fx * pt_cam_reproj[0] / pt_cam_reproj[2] + cx
@@ -306,7 +306,7 @@ def single_frame_sanity_test(data, frame_idx=0):
     # VGGT depth is in arbitrary units. We need to know the scale factor.
     report["checks"]["tsdf_depth_scaling"] = {
         "note": "VGGT depth is NOT metric. For TSDF fusion before GPS alignment, "
-                "use raw depth values directly — the mesh will be in VGGT's "
+                "use raw depth values directly â€” the mesh will be in VGGT's "
                 "arbitrary coordinate system. Apply Sim3 metric transform afterward, "
                 "OR apply metric alignment to camera poses before fusion (preferred).",
         "recommendation": "For initial test: use raw VGGT values. "
@@ -315,6 +315,18 @@ def single_frame_sanity_test(data, frame_idx=0):
 
     return report
 
+
+def _json_safe(obj):
+    if hasattr(obj, "item"):
+        try:
+            return obj.item()
+        except Exception:
+            pass
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
 
 def main():
     parser = argparse.ArgumentParser(description="VGGT Quality Gate & Sanity Test")
@@ -346,7 +358,7 @@ def main():
     # Save report
     report_path = os.path.join(args.scene_dir, "vggt_quality_report.json")
     with open(report_path, "w") as f:
-        json.dump(full_report, f, indent=2)
+        json.dump(full_report, f, indent=2, default=lambda o: bool(o) if hasattr(o, "item") and str(type(o)).find("numpy") >= 0 and getattr(o, "dtype", None) is not None and getattr(o.dtype, "kind", None) == "b" else (o.item() if hasattr(o, "item") else str(o)))
     print(f"\n[OK] Report saved to: {report_path}")
 
     # Print summary
@@ -367,7 +379,7 @@ def main():
             status = check_data.get("pass", "info")
             print(f"  {check_name}: {status}")
             if "note" in check_data:
-                print(f"    → {check_data['note']}")
+                print(f"    â†’ {check_data['note']}")
 
     # Final verdict
     round_trip_ok = sanity_report["checks"].get("round_trip", {}).get("pass", False)
@@ -376,10 +388,10 @@ def main():
     print("\n" + "=" * 60)
     if gate_report["passed"] and (round_trip_ok or "skip" in str(sanity_report["checks"].get("round_trip", {}))):
         print("VERDICT: SAFE TO PROCEED WITH TSDF FUSION")
-        print("  - Extrinsic must be INVERTED for Open3D (camera-from-world → world-from-camera)")
+        print("  - Extrinsic must be INVERTED for Open3D (camera-from-world â†’ world-from-camera)")
         print("  - Depth values are in VGGT arbitrary units (not metric)")
     else:
-        print("VERDICT: DO NOT PROCEED — review the report")
+        print("VERDICT: DO NOT PROCEED â€” review the report")
     print("=" * 60)
 
     return gate_report["passed"]
