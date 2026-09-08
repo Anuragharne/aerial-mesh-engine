@@ -230,8 +230,11 @@ class DroneGaussianModel:
         init_opa = 0.1
         logit_opacities = torch.full((N,), math.log(init_opa / (1.0 - init_opa)), dtype=torch.float32, device=device)
 
-        # Colors (RGB features)
-        colors = torch.tensor(init_colors, dtype=torch.float32, device=device)
+        # SH features (degree 3 -> 16 coefficients)
+        sh_features = torch.zeros((N, 16, 3), dtype=torch.float32, device=device)
+        # Initialize SH degree 0 with colors
+        init_colors_tensor = torch.tensor(init_colors, dtype=torch.float32, device=device)
+        sh_features[:, 0, :] = (init_colors_tensor - 0.5) / 0.28209479177387814
 
         # Parameter dict for gsplat strategy
         self.params = nn.ParameterDict({
@@ -239,7 +242,7 @@ class DroneGaussianModel:
             "scales": nn.Parameter(log_scales),
             "quats": nn.Parameter(quats),
             "opacities": nn.Parameter(logit_opacities),
-            "colors": nn.Parameter(colors),
+            "sh_features": nn.Parameter(sh_features),
         })
 
         # Calculate scene scale
@@ -253,7 +256,7 @@ class DroneGaussianModel:
             "scales": torch.optim.Adam([self.params["scales"]], lr=5.0e-3, eps=1e-15),
             "quats": torch.optim.Adam([self.params["quats"]], lr=1.0e-3, eps=1e-15),
             "opacities": torch.optim.Adam([self.params["opacities"]], lr=5.0e-2, eps=1e-15),
-            "colors": torch.optim.Adam([self.params["colors"]], lr=2.5e-3, eps=1e-15),
+            "sh_features": torch.optim.Adam([self.params["sh_features"]], lr=2.5e-3, eps=1e-15),
         }
         return optimizers
 
@@ -297,13 +300,14 @@ def train(
     reset_every = 600
 
     strategy = DefaultStrategy(
-        prune_opa=0.008,
-        grow_grad2d=0.00025,
-        grow_scale3d=0.015,
+        prune_opa=0.005,
+        grow_grad2d=0.0002,
+        grow_scale3d=0.01,
         refine_start_iter=refine_start,
         refine_stop_iter=refine_stop,
         refine_every=refine_every,
         reset_every=reset_every,
+        absgrad=True,
         verbose=False
     )
     strategy_state = strategy.initialize_state(scene_scale=model.scene_scale)
@@ -324,6 +328,16 @@ def train(
         for param_group in optimizers["means"].param_groups:
             param_group["lr"] = means_lr_init * lr_factor
 
+        # Active SH degree schedule
+        if step < 1000:
+            active_sh_degree = 0
+        elif step < 2000:
+            active_sh_degree = 1
+        elif step < 3000:
+            active_sh_degree = 2
+        else:
+            active_sh_degree = 3
+
         # Sample camera view (cycle sequentially through frames)
         view_idx = (step - 1) % num_views
         frame = gpu_frames[view_idx]
@@ -337,12 +351,14 @@ def train(
             quats=F.normalize(model.params["quats"], dim=-1),
             scales=torch.exp(model.params["scales"]),
             opacities=torch.sigmoid(model.params["opacities"]),
-            colors=model.params["colors"],
+            colors=model.params["sh_features"],
             viewmats=frame["viewmat"],
             Ks=frame["K"],
             width=frame["width"],
             height=frame["height"],
-            packed=False
+            sh_degree=active_sh_degree,
+            packed=False,
+            absgrad=True
         )
 
         rendered_img = renders.squeeze(0)  # (H, W, 3)
@@ -405,11 +421,12 @@ def train(
                 quats=F.normalize(model.params["quats"], dim=-1),
                 scales=torch.exp(model.params["scales"]),
                 opacities=torch.sigmoid(model.params["opacities"]),
-                colors=model.params["colors"],
+                colors=model.params["sh_features"],
                 viewmats=frame["viewmat"],
                 Ks=frame["K"],
                 width=frame["width"],
                 height=frame["height"],
+                sh_degree=3,
                 packed=False
             )
             render_np = (renders.squeeze(0).clamp(0, 1).cpu().numpy() * 255).astype(np.uint8)
@@ -446,10 +463,9 @@ def train(
         final_quats = F.normalize(model.params["quats"], dim=-1).detach().cpu()
         final_opacities = torch.sigmoid(model.params["opacities"]).detach().cpu()
 
-        # Convert RGB colors to SH degree 0
-        final_colors = model.params["colors"].detach().cpu()
-        final_sh0 = (final_colors[:, None, :] - 0.5) / 0.28209479177387814
-        final_shN = torch.zeros((len(final_means), 0, 3))
+        final_sh_features = model.params["sh_features"].detach().cpu()
+        final_sh0 = final_sh_features[:, 0:1, :]
+        final_shN = final_sh_features[:, 1:, :]
 
         export_splats(
             means=final_means,
