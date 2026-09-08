@@ -13,6 +13,8 @@ outputs/*
 .gradio/
 logs/
 *.log
+quality_gate_results*.json
+ingest_telemetry.txt
 
 # Third Party Repositories (we only track our patches)
 third_party/*

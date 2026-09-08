@@ -41,7 +41,7 @@ torch.backends.cudnn.deterministic = False
 import sys
 import os
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(os.path.join(project_root, "third_party"))
+sys.path.append(os.path.join(project_root, "third_party", "vggt"))
 
 from vggt.models.vggt import VGGT
 from vggt.utils.load_fn import load_and_preprocess_images_square
