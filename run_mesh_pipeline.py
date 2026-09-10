@@ -68,8 +68,8 @@ def main():
                         help="Skip VGGT inference (use existing outputs)")
     parser.add_argument("--skip_alignment", action="store_true",
                         help="Skip GPS metric alignment")
-    parser.add_argument("--mesh_method", type=str, default="tsdf",
-                        choices=["tsdf", "poisson", "both"])
+    parser.add_argument("--mesh_method", type=str, default="poisson",
+                        choices=["tsdf", "poisson", "both", "bpa"])
     parser.add_argument("--conf_threshold", type=float, default=1.0,
                         help="Depth confidence threshold")
     parser.add_argument("--viewer", action="store_true",
@@ -98,7 +98,7 @@ def main():
             "--video", os.path.join(project_root, args.video),
             "--srt", os.path.join(project_root, args.srt),
             "--out", scene_dir,
-            "--fps", str(args.fps),
+            "--frames", str(args.frames)
         ])
         if not ok:
             return False

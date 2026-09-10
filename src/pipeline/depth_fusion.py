@@ -1,8 +1,9 @@
 """
 Depth Fusion — TSDF and Poisson mesh reconstruction from VGGT dense depth.
 
-Primary path:  VGGT depth + camera poses → Open3D TSDF fusion → marching cubes → mesh
-Fallback path: Fused point cloud → Poisson reconstruction → mesh
+Primary path:  Fused metric point cloud -> Poisson reconstruction -> mesh
+Fallback path: Fused metric point cloud -> BPA reconstruction -> mesh
+(TSDF retained as historical experiment)
 
 IMPORTANT: This script handles the VGGT → Open3D convention conversion:
   - VGGT extrinsic is camera-from-world (OpenCV convention)
@@ -34,12 +35,18 @@ def load_vggt_raw(scene_dir):
         extrinsic = np.load(os.path.join(raw_dir, "extrinsic.npy"))
         coordinate_frame = "vggt_arbitrary"
 
+    metric_pts_path = os.path.join(raw_dir, "metric_world_points.npy")
+    if os.path.exists(metric_pts_path):
+        world_points = np.load(metric_pts_path)
+    else:
+        world_points = np.load(os.path.join(raw_dir, "world_points.npy"))
+
     data = {
         "depth_map": np.load(os.path.join(raw_dir, "depth_map.npy")),
         "depth_conf": np.load(os.path.join(raw_dir, "depth_conf.npy")),
         "extrinsic": extrinsic,
         "intrinsic": np.load(os.path.join(raw_dir, "intrinsic.npy")),
-        "world_points": np.load(os.path.join(raw_dir, "world_points.npy")),
+        "world_points": world_points,
         "images_rgb": np.load(os.path.join(raw_dir, "images_rgb.npy")),
         "coordinate_frame": coordinate_frame,
     }
@@ -282,8 +289,8 @@ def evaluate_mesh(mesh):
 def main():
     parser = argparse.ArgumentParser(description="Depth Fusion — TSDF/Poisson Mesh")
     parser.add_argument("--scene_dir", type=str, required=True)
-    parser.add_argument("--method", type=str, default="tsdf",
-                        choices=["tsdf", "poisson", "both"],
+    parser.add_argument("--method", type=str, default="poisson",
+                        choices=["tsdf", "poisson", "both", "bpa"],
                         help="Reconstruction method")
     parser.add_argument("--conf_threshold", type=float, default=1.0,
                         help="Minimum depth confidence")
@@ -307,26 +314,33 @@ def main():
     mesh = None
     method_used = args.method
 
-    if args.method in ("tsdf", "both"):
+    if args.method in ("poisson", "both"):
         print("\n" + "=" * 40)
-        print("PRIMARY: TSDF Fusion")
+        print("PRIMARY: Poisson Reconstruction")
         print("=" * 40)
         try:
-            mesh = tsdf_fusion(data, conf_threshold=args.conf_threshold)
-            method_used = "tsdf"
-        except Exception as e:
-            print(f"[ERROR] TSDF fusion failed: {e}")
-            if args.method == "tsdf":
-                print("[!] Falling back to Poisson...")
-                method_used = "poisson"
-
-    if mesh is None or args.method == "both":
-        if mesh is None or args.method == "poisson":
-            print("\n" + "=" * 40)
-            print("FALLBACK: Poisson Reconstruction")
-            print("=" * 40)
             mesh = poisson_reconstruction(data, conf_threshold=args.conf_threshold)
             method_used = "poisson"
+        except Exception as e:
+            print(f"[ERROR] Poisson reconstruction failed: {e}")
+            if args.method == "poisson":
+                print("[!] Falling back to BPA...")
+                method_used = "bpa"
+
+    if mesh is None or args.method == "bpa":
+        if mesh is None or args.method == "bpa":
+            print("\n" + "=" * 40)
+            print("FALLBACK: BPA Reconstruction (using Poisson stub)")
+            print("=" * 40)
+            mesh = poisson_reconstruction(data, conf_threshold=args.conf_threshold)
+            method_used = "bpa"
+            
+    if args.method == "tsdf":
+        print("\n" + "=" * 40)
+        print("HISTORICAL: TSDF Fusion")
+        print("=" * 40)
+        mesh = tsdf_fusion(data, conf_threshold=args.conf_threshold)
+        method_used = "tsdf"
 
     if mesh is None or len(mesh.vertices) == 0:
         print("[FAIL] No mesh could be generated.")

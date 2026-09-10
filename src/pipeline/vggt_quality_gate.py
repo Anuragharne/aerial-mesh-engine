@@ -175,8 +175,8 @@ def quality_gate_a(data):
             "frame": i,
             "fx": float(fx), "fy": float(fy),
             "cx": float(cx), "cy": float(cy),
-            "fx_positive": fx > 0,
-            "fy_positive": fy > 0,
+            "fx_positive": bool(fx > 0),
+            "fy_positive": bool(fy > 0),
         }
         if not (check["fx_positive"] and check["fy_positive"]):
             report["passed"] = False
@@ -252,8 +252,8 @@ def single_frame_sanity_test(data, frame_idx=0):
     report["checks"]["intrinsics"] = {
         "fx": float(fx), "fy": float(fy),
         "cx": float(cx), "cy": float(cy),
-        "cx_near_center": abs(cx - W/2) < W * 0.1,
-        "cy_near_center": abs(cy - H/2) < H * 0.1,
+        "cx_near_center": bool(abs(cx - W/2) < W * 0.1),
+        "cy_near_center": bool(abs(cy - H/2) < H * 0.1),
         "resolution": [H, W],
     }
 
@@ -281,7 +281,7 @@ def single_frame_sanity_test(data, frame_idx=0):
             "pt_world_computed": pt_world_computed.tolist(),
             "pt_world_vggt": pt_world_vggt.tolist(),
             "difference_norm": float(diff),
-            "pass": diff < 0.01,
+            "pass": bool(diff < 0.01),
             "note": "If difference is small, VGGT world_points are consistent "
                     "with depth+intrinsic+extrinsic unprojection."
         }
@@ -296,7 +296,7 @@ def single_frame_sanity_test(data, frame_idx=0):
                 "original_pixel": [px, py],
                 "reprojected_pixel": [float(px_reproj), float(py_reproj)],
                 "error_pixels": float(reproj_error),
-                "pass": reproj_error < 1.0,
+                "pass": bool(reproj_error < 1.0),
             }
     else:
         report["checks"]["round_trip"] = {"skip": "center pixel has zero depth"}

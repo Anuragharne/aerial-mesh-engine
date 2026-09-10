@@ -286,7 +286,7 @@ def main():
     args = parser.parse_args()
 
     print("=" * 60)
-    print("Metric Alignment — GPS/SRT → Sim3 Transform")
+    print("Metric Alignment - GPS/SRT -> Sim3 Transform")
     print("=" * 60)
 
     # Load data
@@ -356,6 +356,15 @@ def main():
     # Save metric-aligned outputs
     out_dir = os.path.join(args.scene_dir, "vggt_raw")
     np.save(os.path.join(out_dir, "metric_extrinsic.npy"), metric_extrinsic)
+
+    # Apply Sim3 to world_points
+    print(f"\\n[+] Applying Sim3 to dense world_points.npy...")
+    world_points = np.load(os.path.join(out_dir, "world_points.npy"))
+    wp_shape = world_points.shape
+    pts = world_points.reshape(-1, 3)
+    pts_transformed = scale * (R @ pts.T).T + t
+    metric_world_points = pts_transformed.reshape(wp_shape)
+    np.save(os.path.join(out_dir, "metric_world_points.npy"), metric_world_points)
 
     # Build alignment report
     report = {
