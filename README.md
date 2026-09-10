@@ -1,41 +1,41 @@
 # SIH26158 Aerial Mesh Engine
 
-This repository contains the source code for the SIH26158 3D Pipeline. It is designed to take raw drone video and telemetry (SRT) and produce a metric 3D mesh and interactive measurement viewer.
+Desktop React/Vite frontend for the drone-to-3D reconstruction workflow.
 
-## Project Objective
-The goal is to provide rapid, hardware-agnostic, drone-based 3D reconstruction and measurement capabilities.
+## Run
 
-## Architecture
-
-Our primary, stable pipeline focuses on direct depth and metric point fusion:
-
-1. **Frame Extraction**: Extract frames from drone MP4.
-2. **VGGT Inference**: Extract dense depth maps, confidence, and camera poses.
-3. **Metric Alignment**: Map VGGT trajectory to GPS/telemetry to obtain metric scale and orientation *before* fusion.
-4. **TSDF Fusion**: Filter and fuse metric depth into a volumetric representation.
-5. **Meshing**: Extract a colored metric mesh using Open3D TSDF integration and Poisson surface reconstruction.
-6. **Viewer**: Interactive web-based visualization and measurement using Viser.
-
-### Secondary Pipeline (Research)
-- **Gaussian Splatting (3DGS)**: Used for high-fidelity novel view synthesis.
-- **SuGaR / gsplat**: Future enhancements for faster splat-to-mesh conversion.
-
-## Hardware Profiles
-The repository is designed to be configurable across hardware profiles:
-- **Development**: RTX 4050 6GB (Prototype: ~12 frames)
-- **High-Performance**: RTX 4090 24GB (Higher frame counts, denser TSDF)
-- **Cloud**: Configurable NVIDIA GPU
-
-*Note: The current demo configuration defaults to 12 frames for rapid prototyping on edge devices, but this is not a universal maximum.*
-
-## Documentation
-- `SETUP.md`: Instructions for environment creation and third-party dependencies.
-- `docs/ARCHITECTURE.md`: Detailed architecture.
-- `docs/EXPERIMENTS.md`: Historical experiments and outputs.
-- `docs/REPOSITORY_INVENTORY.md`: File and directory breakdown.
-
-## Execution
-To run the primary pipeline:
 ```bash
-python run_mesh_pipeline.py --video data/sample/drone_test.MP4 --srt data/sample/drone_test.SRT --frames 12
+npm install
+npm run dev
 ```
+
+Vite proxies `/api` to `http://localhost:8000`.
+
+## Implemented
+
+- Dark engineering-tool UI
+- Header/backend status
+- MP4 + optional SRT selectors
+- Demo mesh loading
+- Three.js / React Three Fiber PLY viewer
+- ENU → Three.js `rotateX(-Math.PI / 2)` display transform
+- Three.js → ENU inverse transform for measurement boundaries
+- Orbit/pan/zoom
+- Camera framing/reset
+- Metric-aware measurement UI
+- Distance and height client-side calculations
+- Planar-area API integration with Finish Area / double-click
+- Camera auto-framing and reset
+- Full-resolution PLY export
+- Processing polling at 2 seconds
+- Error/status states
+
+## Important backend-contract note
+
+The supplied implementation plan specifies the mesh, result, status and area endpoints, but it does **not** specify the endpoint or request schema used to upload an MP4/SRT and create a reconstruction job. The frontend therefore does not invent one. `src/lib/api.js` contains `startReconstruction()` as the single integration point to wire to the actual backend contract.
+
+This is intentional: the UI reports the missing contract instead of pretending reconstruction succeeded.
+
+## Known P1/P2 omissions
+
+The implementation keeps the requested P0 architecture focused. Measurement history, coordinate hover readout, camera reset animation, and helper toggles are not required for the core workflow.

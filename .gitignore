@@ -40,3 +40,8 @@ gaussian_splat/data/
 ScreenCamera_*.json
 ScreenCapture_*.png
 
+node_modules/
+dist/
+.DS_Store
+.env
+.env.*
