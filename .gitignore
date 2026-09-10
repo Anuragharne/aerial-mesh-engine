@@ -32,3 +32,11 @@ models/*
 
 # MacOS
 .DS_Store
+
+# Gaussian Splatting Large Assets & Local Data
+gaussian_splat/downloads/
+gaussian_splat/colmap/
+gaussian_splat/data/
+ScreenCamera_*.json
+ScreenCapture_*.png
+
